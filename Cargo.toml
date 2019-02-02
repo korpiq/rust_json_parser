@@ -1,0 +1,9 @@
+[package]
+name = "json_parser"
+version = "0.1.0"
+authors = ["Kalle Hallivuori <kalle.hallivuori@futurice.com>"]
+edition = "2018"
+
+[dependencies]
+nom = "4.2.0"
+circular = "0.2.0"
