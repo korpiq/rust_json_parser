@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate nom;
 
-use std::str;
+use nom::double;
 use std::io::{stdin, Read};
 use std::collections::HashMap;
 use circular::Buffer;
@@ -43,10 +43,7 @@ named!(parse_json_null<&[u8], JsonNode>,
 );
 
 named!(parse_json_number<&[u8], JsonNode>,
-    do_parse!(
-        tag_s!("0") >>
-        (JsonNode::Number("0.0".parse::<f64>().unwrap()))
-    )
+    do_parse!(value: double >> (JsonNode::Number(value)))
 );
 
 named!(parse_json_array<&[u8], JsonNode>,
@@ -98,8 +95,23 @@ mod tests {
     }
 
     #[test]
-    fn test_zero_ok() {
-        assert_eq!(JsonNode::from_str("0"), JsonNode::Number(0.0));
+    fn test_number_ok() {
+        // we provide an extra character to make parser realize the number is complete.
+
+        assert_eq!(JsonNode::from_str("0 "), JsonNode::Number(0.0));
+        assert_eq!(JsonNode::from_str("+0 "), JsonNode::Number(0.0));
+        assert_eq!(JsonNode::from_str("-0 "), JsonNode::Number(0.0));
+
+        assert_eq!(JsonNode::from_str(".0 "), JsonNode::Number(0.0));
+        assert_eq!(JsonNode::from_str("0.0 "), JsonNode::Number(0.0));
+        assert_eq!(JsonNode::from_str("00.000 "), JsonNode::Number(0.0));
+
+        assert_eq!(JsonNode::from_str("1 "), JsonNode::Number(1.0));
+        assert_eq!(JsonNode::from_str("00012345 "), JsonNode::Number(12345.0));
+        assert_eq!(JsonNode::from_str("12.345000 "), JsonNode::Number(12.345));
+        assert_eq!(JsonNode::from_str("67e89 "), JsonNode::Number(67e89));
+        assert_eq!(JsonNode::from_str("-67e89 "), JsonNode::Number(-67e89));
+        assert_eq!(JsonNode::from_str("5.67e-89 "), JsonNode::Number(5.67e-89));
     }
 
     #[test]
