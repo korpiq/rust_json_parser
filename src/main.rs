@@ -31,7 +31,7 @@ impl JsonNode<'_> {
 
 named!(parse_json_element<&[u8], JsonNode>,
     alt!(
-        parse_json_array | parse_json_null
+        parse_json_null | parse_json_number | parse_json_array
     )
 );
 
@@ -39,6 +39,13 @@ named!(parse_json_null<&[u8], JsonNode>,
     do_parse!(
         tag_s!("null") >>
         (JsonNode::Null)
+    )
+);
+
+named!(parse_json_number<&[u8], JsonNode>,
+    do_parse!(
+        tag_s!("0") >>
+        (JsonNode::Number("0.0".parse::<f64>().unwrap()))
     )
 );
 
@@ -91,6 +98,11 @@ mod tests {
     }
 
     #[test]
+    fn test_zero_ok() {
+        assert_eq!(JsonNode::from_str("0"), JsonNode::Number(0.0));
+    }
+
+    #[test]
     fn test_empty_list_ok() {
         let expected = Vec::new();
         assert_eq!(JsonNode::from_str("[]"), JsonNode::Array(expected));
@@ -133,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "JSON parsing failed: Incomplete(Size(1))")]
+    #[should_panic(expected = "JSON parsing failed: Incomplete(Size(")]
     fn test_empty_input_fails() {
         JsonNode::from_str("");
     }
