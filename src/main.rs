@@ -15,15 +15,17 @@ pub enum JsonNode<'a> {
     Null
 }
 
-pub fn parse_json_string(json : &str) -> JsonNode {
-    parse_json_bytes(json.as_bytes())
-}
+impl JsonNode<'_> {
+    pub fn from_str(json : &str) -> JsonNode {
+        JsonNode::from_bytes(json.as_bytes())
+    }
 
-pub fn parse_json_bytes(buffer : &[u8]) -> JsonNode {
-    let result = parse_json_element(&buffer);
-    match result {
-        Ok(rest_and_json) => rest_and_json.1,
-        Err(reason) => panic!("JSON parsing failed: {}", reason.to_string())
+    pub fn from_bytes(buffer : &[u8]) -> JsonNode {
+        let result = parse_json_element(&buffer);
+        match result {
+            Ok(rest_and_json) => rest_and_json.1,
+            Err(reason) => panic!("JSON parsing failed: {}", reason.to_string())
+        }
     }
 }
 
@@ -68,7 +70,7 @@ fn main() {
         match read_result {
             Ok(read_length) =>  if read_length > 0 {
                 buffer.fill(read_length);
-                parse_json_bytes(buffer.data());
+                JsonNode::from_bytes(buffer.data());
             } else {
                 println!("Completed.");
                 break;
@@ -85,60 +87,60 @@ mod tests {
 
     #[test]
     fn test_null_ok() {
-        assert_eq!(parse_json_string("null"), JsonNode::Null);
+        assert_eq!(JsonNode::from_str("null"), JsonNode::Null);
     }
 
     #[test]
     fn test_empty_list_ok() {
         let expected = Vec::new();
-        assert_eq!(parse_json_string("[]"), JsonNode::Array(expected));
+        assert_eq!(JsonNode::from_str("[]"), JsonNode::Array(expected));
     }
     
     #[test]
     fn test_lists_within_lists_ok() {
         let mut expected = Vec::new();
         expected.push(JsonNode::Array(Vec::new()));
-        assert_eq!(parse_json_string("[[]]"), JsonNode::Array(expected));
+        assert_eq!(JsonNode::from_str("[[]]"), JsonNode::Array(expected));
 
         let mut expected = Vec::new();
         expected.push(JsonNode::Array(Vec::new()));
         expected.push(JsonNode::Array(Vec::new()));
-        assert_eq!(parse_json_string("[[],[]]"), JsonNode::Array(expected));
+        assert_eq!(JsonNode::from_str("[[],[]]"), JsonNode::Array(expected));
 
         let mut expected = Vec::new();
         let mut inner = Vec::new();
         inner.push(JsonNode::Array(Vec::new()));
         expected.push(JsonNode::Array(inner));
-        assert_eq!(parse_json_string("[[[]]]"), JsonNode::Array(expected));
+        assert_eq!(JsonNode::from_str("[[[]]]"), JsonNode::Array(expected));
     }
 
     #[test]
     #[should_panic(expected = "JSON parsing failed: Error(")]
     fn test_list_with_a_comma_only_fails() {
-        parse_json_string("[,]");
+        JsonNode::from_str("[,]");
     }
 
     #[test]
     #[should_panic(expected = "JSON parsing failed: Error(")]
     fn test_list_with_extra_comma_fails() {
-        parse_json_string("[[],]");
+        JsonNode::from_str("[[],]");
     }
 
     #[test]
     #[should_panic(expected = "JSON parsing failed: Error(")]
     fn test_list_starting_with_comma_fails() {
-        parse_json_string("[,[]]");
+        JsonNode::from_str("[,[]]");
     }
 
     #[test]
     #[should_panic(expected = "JSON parsing failed: Incomplete(Size(1))")]
     fn test_empty_input_fails() {
-        parse_json_string("");
+        JsonNode::from_str("");
     }
 
     #[test]
     #[should_panic(expected = "JSON parsing failed: Error(")]
     fn test_bad_syntax_input_fails() {
-        parse_json_string("x");
+        JsonNode::from_str("x");
     }
 }
