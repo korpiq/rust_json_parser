@@ -16,23 +16,16 @@ pub enum JsonNode<'a> {
 }
 
 pub fn parse_json_string(json : &str) -> JsonNode {
-    parse_some_json(json.as_bytes())
+    parse_json_bytes(json.as_bytes())
 }
 
-pub fn parse_some_json(buffer : &[u8]) -> JsonNode {
-    let result = parse_json(&buffer);
+pub fn parse_json_bytes(buffer : &[u8]) -> JsonNode {
+    let result = parse_json_element(&buffer);
     match result {
         Ok(rest_and_json) => rest_and_json.1,
         Err(reason) => panic!("JSON parsing failed: {}", reason.to_string())
     }
 }
-
-named!(parse_json<&[u8], JsonNode>,
-    do_parse!(
-        element: parse_json_element >>
-        (element)
-    )
-);
 
 named!(parse_json_element<&[u8], JsonNode>,
     alt!(
@@ -75,7 +68,7 @@ fn main() {
         match read_result {
             Ok(read_length) =>  if read_length > 0 {
                 buffer.fill(read_length);
-                parse_some_json(buffer.data());
+                parse_json_bytes(buffer.data());
             } else {
                 println!("Completed.");
                 break;
