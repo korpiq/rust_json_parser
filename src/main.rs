@@ -49,8 +49,14 @@ named!(parse_json_number<&[u8], JsonNode>,
 named!(parse_json_string<&[u8], JsonNode>,
     do_parse!(
         tag_s!("\"") >>
+        result: opt!(is_not!("\"")) >>
         tag_s!("\"") >>
-        (JsonNode::String(""))
+        (
+            match result {
+                Some(value) => JsonNode::String(std::str::from_utf8(&value).unwrap()),
+                None => JsonNode::String("")
+            }
+        )
     )
 );
 
@@ -125,6 +131,12 @@ mod tests {
     #[test]
     fn test_empty_string_ok() {
         assert_eq!(JsonNode::from_str("\"\""), JsonNode::String(""));
+    }
+
+   #[test]
+    fn test_strings_ok() {
+        assert_eq!(JsonNode::from_str("\" \""), JsonNode::String(" "));
+        assert_eq!(JsonNode::from_str("\"#€%&/()=\""), JsonNode::String("#€%&/()="));
     }
 
     #[test]
