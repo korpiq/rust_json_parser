@@ -31,7 +31,7 @@ impl JsonNode<'_> {
 
 named!(parse_json_element<&[u8], JsonNode>,
     alt!(
-        parse_json_null | parse_json_number | parse_json_array
+        parse_json_null | parse_json_number | parse_json_string | parse_json_array
     )
 );
 
@@ -44,6 +44,14 @@ named!(parse_json_null<&[u8], JsonNode>,
 
 named!(parse_json_number<&[u8], JsonNode>,
     do_parse!(value: double >> (JsonNode::Number(value)))
+);
+
+named!(parse_json_string<&[u8], JsonNode>,
+    do_parse!(
+        tag_s!("\"") >>
+        tag_s!("\"") >>
+        (JsonNode::String(""))
+    )
 );
 
 named!(parse_json_array<&[u8], JsonNode>,
@@ -112,6 +120,11 @@ mod tests {
         assert_eq!(JsonNode::from_str("67e89 "), JsonNode::Number(67e89));
         assert_eq!(JsonNode::from_str("-67e89 "), JsonNode::Number(-67e89));
         assert_eq!(JsonNode::from_str("5.67e-89 "), JsonNode::Number(5.67e-89));
+    }
+
+    #[test]
+    fn test_empty_string_ok() {
+        assert_eq!(JsonNode::from_str("\"\""), JsonNode::String(""));
     }
 
     #[test]
