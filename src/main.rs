@@ -9,7 +9,7 @@ use circular::Buffer;
 #[derive(PartialEq, Debug)]
 pub enum JsonNode<'a> {
     Number(f64),
-    String(&'a str),
+    String(String),
     Array(Vec<JsonNode<'a>>),
     Object(&'a HashMap<&'a str, &'a JsonNode<'a>>),
     Null
@@ -49,16 +49,39 @@ named!(parse_json_number<&[u8], JsonNode>,
 named!(parse_json_string<&[u8], JsonNode>,
     do_parse!(
         tag_s!("\"") >>
-        result: opt!(is_not!("\"")) >>
+        value: parse_json_escaped_string >>
         tag_s!("\"") >>
-        (
-            match result {
-                Some(value) => JsonNode::String(std::str::from_utf8(&value).unwrap()),
-                None => JsonNode::String("")
-            }
-        )
+        (JsonNode::String(String::from_utf8(value).unwrap()))
     )
 );
+
+named!(parse_json_escaped_string<&[u8], Vec<u8>>,
+    do_parse!(
+        result: many0!(
+            alt!(
+                is_not!("\\\"")
+                | value!("\\".as_bytes(), tag_s!("\\\\"))
+                | value!("\"".as_bytes(), tag_s!("\\\""))
+            )
+        )
+        >>
+        (collect_many(result))
+    )
+);
+
+// TODO: there must be a train wreck to replace this.
+fn collect_many(many : Vec<&[u8]>) -> Vec<u8> {
+    let mut flat : Vec<u8> = Vec::new();
+    let mut arrays_iterator = many.iter();
+    while let Some(current_array) = arrays_iterator.next() {
+        let mut character_iterator = current_array.iter();
+        while let Some(character) = character_iterator.next() {
+            flat.push(*character);
+        }
+    }
+
+    flat
+}
 
 named!(parse_json_array<&[u8], JsonNode>,
     do_parse!(
@@ -130,13 +153,19 @@ mod tests {
 
     #[test]
     fn test_empty_string_ok() {
-        assert_eq!(JsonNode::from_str("\"\""), JsonNode::String(""));
+        assert_eq!(JsonNode::from_str("\"\""), JsonNode::String("".to_string()));
     }
 
    #[test]
     fn test_strings_ok() {
-        assert_eq!(JsonNode::from_str("\" \""), JsonNode::String(" "));
-        assert_eq!(JsonNode::from_str("\"#€%&/()=\""), JsonNode::String("#€%&/()="));
+        assert_eq!(JsonNode::from_str("\" \""), JsonNode::String(" ".to_string()));
+        assert_eq!(JsonNode::from_str("\"#€%&/()=\""), JsonNode::String("#€%&/()=".to_string()));
+    }
+
+   #[test]
+    fn test_escaped_strings_ok() {
+        assert_eq!(JsonNode::from_str("\"\\\"\""), JsonNode::String("\"".to_string()));
+        assert_eq!(JsonNode::from_str("\"\\\\\""), JsonNode::String("\\".to_string()));
     }
 
     #[test]
