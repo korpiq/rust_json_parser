@@ -2,7 +2,10 @@
 extern crate nom;
 
 use nom::double;
-use std::io::{stdin, Read};
+use std::fmt;
+#[allow(unused_imports)]
+use std::io::{stdin, Read, Write};
+#[warn(unused_imports)]
 use std::collections::HashMap;
 use circular::Buffer;
 
@@ -25,6 +28,38 @@ impl JsonNode<'_> {
         match result {
             Ok(rest_and_json) => rest_and_json.1,
             Err(reason) => panic!("JSON parsing failed: {}", reason.to_string())
+        }
+    }
+
+    fn fmt_array(a : &Vec<JsonNode<'_>>, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut comma = false;
+        let mut elements = a.iter();
+
+        let r = write!(f, "[");
+        match r { Err(_) => return r, Ok(_) => () }
+
+        while let Some(it) = elements.next() {
+            if comma {
+                let r = write!(f, ",");
+                match r { Err(_) => return r, Ok(_) => () }
+            }
+            let r = write!(f, "{}", it);
+            match r { Err(_) => return r, Ok(_) => () }
+            comma = true
+        }
+
+        write!(f, "]")
+    }
+}
+
+impl fmt::Display for JsonNode<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JsonNode::Number(n) => f64::fmt(n, f),
+            JsonNode::String(s) => write!(f, "\"{}\"", s),
+            JsonNode::Array(a) => JsonNode::fmt_array(a, f),
+            JsonNode::Object(o) => write!(f, "{{{:?}}}", o),
+            JsonNode::Null => write!(f, "null")
         }
     }
 }
@@ -132,7 +167,7 @@ fn main() {
         match read_result {
             Ok(read_length) =>  if read_length > 0 {
                 buffer.fill(read_length);
-                JsonNode::from_bytes(buffer.data());
+                println!("{}", JsonNode::from_bytes(buffer.data()));
             } else {
                 println!("Completed.");
                 break;
@@ -247,5 +282,14 @@ mod tests {
     #[should_panic(expected = "JSON parsing failed: Error(")]
     fn test_bad_syntax_input_fails() {
         JsonNode::from_str("x");
+    }
+
+    #[test]
+    fn test_output_format_ok() {
+        let mut output = Vec::new();
+        let json_string = "[1.23,null,\"foo\"]";
+        let json = JsonNode::from_str(json_string);
+        write!(output, "{}", json).expect("write never fails");
+        assert_eq!(std::str::from_utf8(&output).unwrap(), json_string);
     }
 }
