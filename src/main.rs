@@ -59,28 +59,49 @@ named!(parse_json_escaped_string<&[u8], Vec<u8>>,
     do_parse!(
         result: many0!(
             alt!(
-                is_not!("\\\"")
-                | value!("\\".as_bytes(), tag_s!("\\\\"))
-                | value!("\"".as_bytes(), tag_s!("\\\""))
+                map!( parse_json_escaped_ascii, Vec::from )
+                | parse_json_unicode_escape
             )
         )
         >>
-        (collect_many(result))
+        (flatten(result))
     )
 );
 
-// TODO: there must be a train wreck to replace this.
-fn collect_many(many : Vec<&[u8]>) -> Vec<u8> {
+fn flatten(deep : Vec<Vec<u8>>) -> Vec<u8> {
     let mut flat : Vec<u8> = Vec::new();
-    let mut arrays_iterator = many.iter();
-    while let Some(current_array) = arrays_iterator.next() {
-        let mut character_iterator = current_array.iter();
-        while let Some(character) = character_iterator.next() {
-            flat.push(*character);
-        }
-    }
-
+    deep.iter().for_each(| inner | flat.extend(inner.iter()));
     flat
+}
+
+named!(parse_json_escaped_ascii<&[u8], &[u8]>,
+    alt!(
+        is_not!("\\\"")
+        | value!("\\".as_bytes(), tag_s!("\\\\"))
+        | value!("\"".as_bytes(), tag_s!("\\\""))
+        | value!("/".as_bytes(), tag_s!("\\/"))
+        | value!("\08".as_bytes(), tag_s!("\\b"))
+        | value!("\n".as_bytes(), tag_s!("\\n"))
+        | value!("\r".as_bytes(), tag_s!("\\r"))
+        | value!("\t".as_bytes(), tag_s!("\\t"))
+    )
+);
+
+named!(parse_json_unicode_escape<&[u8], Vec<u8>>,
+    do_parse!(
+        tag_s!("\\u") >>
+        result: map!( take!(4), codepoint_from_hex ) >>
+        (result)
+    )
+);
+
+#[allow(dead_code)] // used in parse_json_unicode_escape
+fn codepoint_from_hex(input: &[u8]) -> Vec<u8> {
+  let hex = String::from_utf8(input.to_vec()).unwrap();
+  let value = u32::from_str_radix(&hex, 16).unwrap();
+  let mut buffer : [u8; 4] = [0; 4];
+
+  std::char::from_u32(value).unwrap().encode_utf8(&mut buffer).as_bytes().to_vec()
 }
 
 named!(parse_json_array<&[u8], JsonNode>,
@@ -166,6 +187,12 @@ mod tests {
     fn test_escaped_strings_ok() {
         assert_eq!(JsonNode::from_str("\"\\\"\""), JsonNode::String("\"".to_string()));
         assert_eq!(JsonNode::from_str("\"\\\\\""), JsonNode::String("\\".to_string()));
+        assert_eq!(JsonNode::from_str("\"\\/\""), JsonNode::String("/".to_string()));
+        assert_eq!(JsonNode::from_str("\"\\b\""), JsonNode::String("\08".to_string()));
+        assert_eq!(JsonNode::from_str("\"\\n\""), JsonNode::String("\n".to_string()));
+        assert_eq!(JsonNode::from_str("\"\\r\""), JsonNode::String("\r".to_string()));
+        assert_eq!(JsonNode::from_str("\"\\t\""), JsonNode::String("\t".to_string()));
+        assert_eq!(JsonNode::from_str("\"\\u211D\""), JsonNode::String("\u{211D}".to_string()));
     }
 
     #[test]
