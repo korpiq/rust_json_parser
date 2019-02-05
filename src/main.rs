@@ -10,15 +10,15 @@ use std::collections::HashMap;
 use circular::Buffer;
 
 #[derive(PartialEq, Debug)]
-pub enum JsonNode<'a> {
+pub enum JsonNode {
     Number(f64),
     String(String),
-    Array(Vec<JsonNode<'a>>),
-    Object(&'a HashMap<&'a str, &'a JsonNode<'a>>),
+    Array(Vec<JsonNode>),
+    Object(HashMap<String, JsonNode>),
     Null
 }
 
-impl JsonNode<'_> {
+impl JsonNode {
     pub fn from_str(json : &str) -> JsonNode {
         JsonNode::from_bytes(json.as_bytes())
     }
@@ -31,7 +31,7 @@ impl JsonNode<'_> {
         }
     }
 
-    fn fmt_array(a : &Vec<JsonNode<'_>>, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt_array(a : &Vec<JsonNode>, f: &mut fmt::Formatter) -> fmt::Result {
         let mut comma = false;
         let mut elements = a.iter();
 
@@ -50,15 +50,35 @@ impl JsonNode<'_> {
 
         write!(f, "]")
     }
+
+    fn fmt_object(o : &HashMap<String, JsonNode>, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut comma = false;
+        let mut elements = o.iter();
+
+        let r = write!(f, "{{");
+        match r { Err(_) => return r, Ok(_) => () }
+
+        while let Some((k, v)) = elements.next() {
+            if comma {
+                let r = write!(f, ",");
+                match r { Err(_) => return r, Ok(_) => () }
+            }
+            let r = write!(f, "\"{}\":{}", k, v);
+            match r { Err(_) => return r, Ok(_) => () }
+            comma = true
+        }
+
+        write!(f, "}}")
+    }
 }
 
-impl fmt::Display for JsonNode<'_> {
+impl fmt::Display for JsonNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             JsonNode::Number(n) => f64::fmt(n, f),
             JsonNode::String(s) => write!(f, "\"{}\"", s),
             JsonNode::Array(a) => JsonNode::fmt_array(a, f),
-            JsonNode::Object(o) => write!(f, "{{{:?}}}", o),
+            JsonNode::Object(o) => JsonNode::fmt_object(o, f),
             JsonNode::Null => write!(f, "null")
         }
     }
@@ -66,7 +86,7 @@ impl fmt::Display for JsonNode<'_> {
 
 named!(parse_json_element<&[u8], JsonNode>,
     alt!(
-        parse_json_null | parse_json_number | parse_json_string | parse_json_array
+        parse_json_null | parse_json_number | parse_json_string | parse_json_array | parse_json_object
     )
 );
 
@@ -83,23 +103,22 @@ named!(parse_json_number<&[u8], JsonNode>,
 
 named!(parse_json_string<&[u8], JsonNode>,
     do_parse!(
-        tag_s!("\"") >>
         value: parse_json_escaped_string >>
-        tag_s!("\"") >>
-        (JsonNode::String(String::from_utf8(value).unwrap()))
+        (JsonNode::String(value))
     )
 );
 
-named!(parse_json_escaped_string<&[u8], Vec<u8>>,
+named!(parse_json_escaped_string<&[u8], String>,
     do_parse!(
+        tag_s!("\"") >>
         result: many0!(
             alt!(
                 map!( parse_json_escaped_ascii, Vec::from )
                 | parse_json_unicode_escape
             )
-        )
-        >>
-        (flatten(result))
+        ) >>
+        tag_s!("\"") >>
+        (String::from_utf8(flatten(result)).unwrap())
     )
 );
 
@@ -154,6 +173,37 @@ named!(parse_json_array<&[u8], JsonNode>,
                 )
             }
         )
+    )
+);
+
+named!(parse_json_object<&[u8], JsonNode>,
+    do_parse!(
+        tag_s!("{") >>
+        content: opt!(separated_list_complete!(tag_s!(","), parse_json_pair)) >>
+        tag_s!("}") >>
+        (
+            {
+                let mut container = HashMap::<String, JsonNode>::new();
+                match content {
+                    Some(mut elements) => {
+                        while let Some((k, v)) = elements.pop() {
+                            match container.insert(k, v) { _ => () }
+                        }
+                    },
+                    None => ()
+                }
+                JsonNode::Object(container)
+            }
+        )
+    )
+);
+
+named!(parse_json_pair<&[u8], (String, JsonNode)>,
+    do_parse!(
+        name: parse_json_escaped_string >>
+        tag_s!(":") >>
+        value: parse_json_element >>
+        ( (name, value) )
     )
 );
 
@@ -282,6 +332,20 @@ mod tests {
     #[should_panic(expected = "JSON parsing failed: Error(")]
     fn test_bad_syntax_input_fails() {
         JsonNode::from_str("x");
+    }
+
+
+    #[test]
+    fn test_empty_object_ok() {
+        let expected = HashMap::<String, JsonNode>::new();
+        assert_eq!(JsonNode::from_str("{}"), JsonNode::Object(expected));
+    }
+
+    #[test]
+    fn test_object_ok() {
+        let mut expected = HashMap::<String, JsonNode>::new();
+        expected.insert("foo".to_string(), JsonNode::Null);
+        assert_eq!(JsonNode::from_str("{\"foo\":null}"), JsonNode::Object(expected));
     }
 
     #[test]
