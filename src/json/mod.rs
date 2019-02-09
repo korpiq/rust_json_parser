@@ -10,6 +10,7 @@ pub enum JsonNode {
     String(String),
     Array(Vec<JsonNode>),
     Object(HashMap<String, JsonNode>),
+    Boolean(bool),
     Null
 }
 
@@ -20,6 +21,7 @@ impl fmt::Display for JsonNode {
             JsonNode::String(s) => write!(f, "\"{}\"", s),
             JsonNode::Array(a) => JsonNode::fmt_array(a, f),
             JsonNode::Object(o) => JsonNode::fmt_object(o, f),
+            JsonNode::Boolean(t) => write!(f, "{}", if *t { "true" } else { "false" }),
             JsonNode::Null => write!(f, "null")
         }
     }

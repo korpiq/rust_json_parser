@@ -11,7 +11,7 @@ pub fn parse_json(input: &[u8]) -> Result<(&[u8], JsonNode), nom::Err<&[u8], u32
 
 named!(parse_json_element<&[u8], JsonNode>,
     alt!(
-        parse_json_null | parse_json_number | parse_json_string | parse_json_array | parse_json_object
+        parse_json_null | parse_json_boolean | parse_json_number | parse_json_string | parse_json_array | parse_json_object
     )
 );
 
@@ -19,6 +19,13 @@ named!(parse_json_null<&[u8], JsonNode>,
     do_parse!(
         tag_s!("null") >>
         (JsonNode::Null)
+    )
+);
+
+named!(parse_json_boolean<&[u8], JsonNode>,
+    do_parse!(
+        truth: alt!(tag_s!("true") | tag_s!("false")) >>
+        (JsonNode::Boolean(truth[0] == b't'))
     )
 );
 
@@ -140,6 +147,12 @@ mod tests {
     #[test]
     fn test_null_ok() {
         assert_eq!(JsonNode::from_str("null"), JsonNode::Null);
+    }
+
+    #[test]
+    fn test_boolean_ok() {
+        assert_eq!(JsonNode::from_str("true"), JsonNode::Boolean(true));
+        assert_eq!(JsonNode::from_str("false"), JsonNode::Boolean(false));
     }
 
     #[test]
